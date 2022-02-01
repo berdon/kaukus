@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -23,7 +24,7 @@ public class LSMTreeTests {
     public void lsmLoadsSegments() throws URISyntaxException, IOException {
         var segmentFilePath = Paths.get(getClass().getClassLoader().getResource("SSTableTest.0").toURI()).toString();
         var filePath = Paths.get(segmentFilePath.substring(0, segmentFilePath.length() - 2));
-        try (var lsmTree = new LSMTree(filePath)) {
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             for (var i = 0; i < 10; i++) {
                 var result = lsmTree.get(MessageFormat.format("some-key-{0}", i));
                 assertEquals(MessageFormat.format("some-value-{0}", i), result);
@@ -35,7 +36,7 @@ public class LSMTreeTests {
     public void canStoreInMemory() throws URISyntaxException, IOException {
         var segmentFilePath = Paths.get(getClass().getClassLoader().getResource("SSTableTest.0").toURI()).toString();
         var filePath = Paths.get(segmentFilePath.substring(0, segmentFilePath.length() - 2));
-        try (var lsmTree = new LSMTree(filePath)) {
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             lsmTree.set("some-other-key", "a value");
             assertEquals("a value", lsmTree.get("some-other-key"));
             lsmTree.set("some-other-key2", "a value2");
@@ -47,7 +48,7 @@ public class LSMTreeTests {
     public void tombstonesDoNotExist() throws URISyntaxException, IOException {
         var segmentFilePath = Paths.get(getClass().getClassLoader().getResource("SSTableTombstoneTest.0").toURI()).toString();
         var filePath = Paths.get(segmentFilePath.substring(0, segmentFilePath.length() - 2));
-        try (var lsmTree = new LSMTree(filePath)) {
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             assertFalse(lsmTree.containsKey("some-deleted-value"));
             assertNull(lsmTree.get("some-deleted-value"));
         }
@@ -57,7 +58,7 @@ public class LSMTreeTests {
     public void canFlushInMemoryToNextSegment() throws IOException {
         var tempFile = File.createTempFile("test", null);
         var filePath = Path.of(tempFile.getPath());
-        try (var lsmTree = new LSMTree(filePath)) {
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             for (var i = 0; i < 10; i++) {
                 lsmTree.set(MessageFormat.format("some-key-{0}", i), MessageFormat.format("some-value-{0}", i));
             }
@@ -76,30 +77,30 @@ public class LSMTreeTests {
 
             var sstable = new SSTable(Path.of(filePath.toString() + ".0"), SSTableConfiguration.builder().build());
             for (var i = 0; i < 10; i++) {
-                assertTrue(sstable.containsKey(MessageFormat.format("some-key-{0}", i)));
+                assertTrue(sstable.containsKey(MessageFormat.format("some-key-{0}", i)).isHasKey());
                 var result = sstable.tryGetValue(MessageFormat.format("some-key-{0}", i));
                 assertEquals(MessageFormat.format("some-value-{0}", i), result.getValue());
             }
 
-            assertTrue(sstable.containsKey("k"));
+            assertTrue(sstable.containsKey("k").isHasKey());
             assertEquals("v", sstable.tryGetValue("k").getValue());
 
-            assertTrue(sstable.containsKey("ke"));
+            assertTrue(sstable.containsKey("ke").isHasKey());
             assertEquals("v", sstable.tryGetValue("ke").getValue());
 
-            assertTrue(sstable.containsKey("key"));
+            assertTrue(sstable.containsKey("key").isHasKey());
             assertEquals("v", sstable.tryGetValue("key").getValue());
 
-            assertTrue(sstable.containsKey("key1"));
+            assertTrue(sstable.containsKey("key1").isHasKey());
             assertEquals("va", sstable.tryGetValue("key1").getValue());
 
-            assertTrue(sstable.containsKey("key2"));
+            assertTrue(sstable.containsKey("key2").isHasKey());
             assertEquals("val", sstable.tryGetValue("key2").getValue());
 
-            assertTrue(sstable.containsKey("key3"));
+            assertTrue(sstable.containsKey("key3").isHasKey());
             assertEquals("valu", sstable.tryGetValue("key3").getValue());
 
-            assertTrue(sstable.containsKey("key4"));
+            assertTrue(sstable.containsKey("key4").isHasKey());
             assertEquals("value", sstable.tryGetValue("key4").getValue());
 
             // Assert the wal is gone
@@ -111,7 +112,7 @@ public class LSMTreeTests {
     public void walLogsWritten() throws URISyntaxException, IOException {
         var segmentFilePath = Paths.get(getClass().getClassLoader().getResource("SSTableTest.0").toURI()).toString();
         var filePath = Paths.get(segmentFilePath.substring(0, segmentFilePath.length() - 2));
-        try (var lsmTree = new LSMTree(filePath)) {
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             lsmTree.set("some-other-key", "a value");
             lsmTree.set("some-other-key2", "a value 2");
             lsmTree.set("some-other-key3", "a value 3");
@@ -159,7 +160,7 @@ public class LSMTreeTests {
     @Test
     public void canReadValuesFromRecoveredWal() throws URISyntaxException, IOException {
         var filePath = Paths.get(getClass().getClassLoader().getResource("SSTableWalFileTest").toURI());
-        try (var lsmTree = new LSMTree(filePath)) {
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             /*
             lsmTree.set("some-other-key", "a value");
             lsmTree.set("some-other-key2", "a value 2");
@@ -172,5 +173,55 @@ public class LSMTreeTests {
             assertNull(lsmTree.get("some-other-key2"));
             assertEquals("a new value 3", lsmTree.get("some-other-key3"));
         }
+    }
+
+    @Test
+    public void canCompact() throws URISyntaxException, FileNotFoundException, IOException {
+        var segmentResource0 = Paths.get(getClass().getClassLoader().getResource("SSTableCompactTest.0").toURI());
+        var segmentResource1 = Paths.get(getClass().getClassLoader().getResource("SSTableCompactTest.1").toURI());
+        var tempDirectory = Files.createTempDirectory(null);
+        Files.copy(segmentResource0, tempDirectory.resolve("SSTableCompactTest.0"));
+        Files.copy(segmentResource1, tempDirectory.resolve("SSTableCompactTest.1"));
+        var lsmTree = LSMTree.openOrCreate(tempDirectory.resolve("SSTableCompactTest"));
+
+        for (var i = 0; i < 10; i++) {
+            var key = MessageFormat.format("some-key-{0}", i);
+            var value = MessageFormat.format("some-value-{0}", i);
+            assertTrue(lsmTree.containsKey(key));
+            assertEquals(value, lsmTree.get(key));
+        }
+
+        assertTrue(lsmTree.containsKey("some-value-to-overwrite"));
+        assertEquals("newer value", lsmTree.get("some-value-to-overwrite"));
+
+        assertFalse(lsmTree.containsKey("some-value-to-delete"));
+        assertNull(lsmTree.get("some-value-to-delete"));
+
+        assertTrue(lsmTree.containsKey("some-deleted-value"));
+        assertEquals("phoenix", lsmTree.get("some-deleted-value"));
+
+        assertTrue(lsmTree.containsKey("some-older-untouched-value"));
+        assertEquals("legacy value", lsmTree.get("some-older-untouched-value"));
+        
+        lsmTree.compact();
+
+        for (var i = 0; i < 10; i++) {
+            var key = MessageFormat.format("some-key-{0}", i);
+            var value = MessageFormat.format("some-value-{0}", i);
+            assertTrue(lsmTree.containsKey(key));
+            assertEquals(value, lsmTree.get(key));
+        }
+
+        assertTrue(lsmTree.containsKey("some-value-to-overwrite"));
+        assertEquals("newer value", lsmTree.get("some-value-to-overwrite"));
+
+        assertFalse(lsmTree.containsKey("some-value-to-delete"));
+        assertNull(lsmTree.get("some-value-to-delete"));
+
+        assertTrue(lsmTree.containsKey("some-deleted-value"));
+        assertEquals("phoenix", lsmTree.get("some-deleted-value"));
+
+        assertTrue(lsmTree.containsKey("some-older-untouched-value"));
+        assertEquals("legacy value", lsmTree.get("some-older-untouched-value"));
     }
 }

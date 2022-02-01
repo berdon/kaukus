@@ -2,14 +2,19 @@ package io.hnsn.kaukus.persistence;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.Base64.Decoder;
+import java.util.stream.Stream;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 public class SSTable {
     private final Path filePath;
@@ -27,9 +32,21 @@ public class SSTable {
         return tryGetValueOrContains(key, false);
     }
 
-    public boolean containsKey(String key) throws FileNotFoundException, IOException {
+    /**
+     * Returns whether the SSTable contains the key or not. Note: Containing the key doesn't
+     * mean the SSTable "contains" the key in the sense of a Map interface. Containment is
+     * dependant upon whether the value is tombstoned (deleted) or not. If the value
+     * is a tombstone then this SSTable has marked the item as having been deleted.
+     * @param key The key to query
+     * @return A ContainsKey object that specifies whether the key is tracked and whether
+     *         or not the key exists (isHasKey(), isTombstone())
+     * @throws FileNotFoundException
+     * @throws IOException
+     */
+    public ContainsKey containsKey(String key) throws FileNotFoundException, IOException {
         var result = tryGetValueOrContains(key, true);
-        return result != null && !result.isTombstone;
+        if (result == null) return ContainsKey.FALSE;
+        return new ContainsKey(true, result.isTombstone);
     }
 
     /*package*/ SSTableResult tryGetValueOrContains(String key, boolean existsOnly) throws FileNotFoundException, IOException {
@@ -135,5 +152,77 @@ public class SSTable {
         private final String key;
         private final long index;
         private final boolean isTombstone;
+    }
+
+    public static void compact(Path olderPath, Path newPath, Path outputPath) throws FileNotFoundException, IOException {
+        try (var outputStream = new FileOutputStream(outputPath.toString())) {
+            final var decoder = Base64.getDecoder();
+            var olderEntry = new Entry();
+            var newerEntry = new Entry();
+            var olderIter = Files.lines(olderPath).map(line -> olderEntry.set(decoder, line)).iterator();
+            var newIter = Files.lines(newPath).map(line -> newerEntry.set(decoder, line)).iterator();
+            Entry olderLine, newerLine;
+            olderLine = olderIter.hasNext() ? olderIter.next() : null;
+            newerLine = newIter.hasNext() ? newIter.next() : null;
+            while(olderLine != null || newerLine != null) {
+                var comparison = olderLine != null && newerLine != null ? olderLine.key.compareTo(newerLine.key) : 0;
+                if (olderLine != null && newerLine != null && comparison == 0) {
+                    outputStream.write(newerLine.line.getBytes());
+                    outputStream.write('\n');
+                    olderLine = olderIter.hasNext() ? olderIter.next() : null;
+                    newerLine = newIter.hasNext() ? newIter.next() : null;
+                }
+                else if (olderLine != null && (newerLine == null || comparison < 0)) {
+                    outputStream.write(olderLine.line.getBytes());
+                    outputStream.write('\n');
+                    olderLine = olderIter.hasNext() ? olderIter.next() : null;
+                }
+                else if (newerLine != null && (olderLine == null || comparison > 0)) {
+                    outputStream.write(newerLine.line.getBytes());
+                    outputStream.write('\n');
+                    newerLine = newIter.hasNext() ? newIter.next() : null;
+                }
+            }
+        }
+    }
+
+    /*package*/ static Stream<Entry> readAllLines(Path filePath) throws IOException {
+        final var decoder = Base64.getDecoder();
+        return Files.lines(filePath).map(line -> new Entry(decoder, line));
+    }
+
+    @AllArgsConstructor
+    @Getter
+    public static class ContainsKey {
+        private static final ContainsKey FALSE = new ContainsKey(false, false);
+        private boolean hasKey;
+        private boolean isTombstone;
+    }
+
+    /*package*/ static class Entry {
+        public String key;
+        public String line;
+        public boolean isTombstone = false;
+        public String value;
+
+        public Entry() { }
+
+        public Entry(Decoder decoder, String line) {
+            set(decoder, line);
+        }
+
+        public Entry set(Decoder decoder, String line) {
+            var tokens = line.split(":");
+            if (tokens.length == 1) isTombstone = true;
+            else value = tokens[1];
+            this.key = new String(decoder.decode(tokens[0].getBytes()));
+            this.line = line;
+            return this;
+        }
+
+        public String deserialize(SerializerFactory factory) throws IOException {
+            if (isTombstone) return null;
+            return factory.createDeserializer(new ByteArrayInputStream(value.getBytes())).read();
+        }
     }
 }

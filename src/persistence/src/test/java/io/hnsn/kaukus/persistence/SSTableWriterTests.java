@@ -27,7 +27,7 @@ public class SSTableWriterTests {
         
         var sstable = new SSTable(filePath, SSTableConfiguration.builder().build());
         for (var i = 0; i < 10; i++) {
-            assertTrue(sstable.containsKey(MessageFormat.format("some-key-{0}", i)));
+            assertTrue(sstable.containsKey(MessageFormat.format("some-key-{0}", i)).isHasKey());
             var result = sstable.tryGetValue(MessageFormat.format("some-key-{0}", i));
             assertEquals(MessageFormat.format("some-value-{0}", i), result.getValue());
         }
@@ -44,6 +44,24 @@ public class SSTableWriterTests {
         }
         
         var sstable = new SSTable(filePath, SSTableConfiguration.builder().build());
-        assertFalse(sstable.containsKey("some-deleted-value"));
+        assertTrue(sstable.containsKey("some-deleted-value").isHasKey());
+        assertTrue(sstable.containsKey("some-deleted-value").isTombstone());
     }
+
+    // @Test
+    // public void canWrite() throws IOException {
+    //     var tempFile = File.createTempFile("test", null);
+    //     var filePath = Path.of(tempFile.getPath());
+    //     var outputStream = new FileOutputStream(tempFile);
+    //     try (var sstableWriter = new SSTableWriter(outputStream, new Base64SerializerFactory())) {
+    //         for (var i = 0; i < 10; i++) {
+    //             sstableWriter.write(MessageFormat.format("some-key-{0}", i), MessageFormat.format("some-value-{0}", i));
+    //         }
+    //         sstableWriter.write("some-value-to-overwrite", "newer value");
+    //         sstableWriter.writeTombstone("some-value-to-delete");
+    //         sstableWriter.write("some-deleted-value", "phoenix");
+    //         sstableWriter.write("some-older-untouched-value", "legacy value");
+    //         sstableWriter.flush();
+    //     }
+    // }
 }

@@ -6,9 +6,11 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.CopyOption;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -18,6 +20,8 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -38,16 +42,28 @@ public class LSMTree implements Closeable {
     private final Encoder encoder = Base64.getEncoder();
 
     // Test Hooks
+    public static LSMTree openOrCreate(Path filePath) {
+        var lsmTree = new LSMTree(filePath);
+
+        // Delete any orphaned merge results "file.1-0"
+        try {
+            lsmTree.purgeOrphanedSegments();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            throw new RuntimeException(e);
+        }
+
+        if (Files.exists(lsmTree.walFile)) {
+            lsmTree.rebuildIndex();
+        }
+
+        return lsmTree;
+    }
     
-    public LSMTree(Path filePath) {
+    private LSMTree(Path filePath) {
         this.filePath = filePath.getParent();
         fileName = filePath.getName(filePath.getNameCount() - 1);
         walFile = filePath;
-
-        // TODO: Handle crash recovery
-        if (Files.exists(walFile)) {
-            rebuildIndex();
-        }
     }
 
     private void rebuildIndex() {
@@ -82,7 +98,8 @@ public class LSMTree implements Closeable {
         var segments = getSegments();
         for (var segment : segments.entrySet()) {
             try {
-                return segment.getValue().containsKey(key);
+                var containsKey = segment.getValue().containsKey(key);
+                if (containsKey.isHasKey()) return !containsKey.isTombstone();
             } catch (FileNotFoundException e) {
                 // TODO Auto-generated catch block
                 throw new RuntimeException(e);
@@ -166,6 +183,46 @@ public class LSMTree implements Closeable {
             } catch (IOException e) {
                 // TODO
                 throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public void compact() throws FileNotFoundException, IOException {
+        var segments = getSegments();
+        while (segments.size() > 1) {
+            var keys = segments.keySet().toArray(new String[0]);
+            var olderFile = keys[keys.length - 1];
+            var newerFile = keys[keys.length - 2];
+            incrementalCompact(Path.of(olderFile), Path.of(newerFile));
+        }
+    }
+
+    private void incrementalCompact(Path olderFile, Path newerFile) throws FileNotFoundException, IOException {
+        var outputFile = Path.of(newerFile.toString() + "-0");
+
+        // Compact new,old to new-0
+        // Segments, if reloaded at this point, will still only grab new/old
+        SSTable.compact(olderFile, newerFile, outputFile);
+
+        // Need to lock the segment when we perform the overwrite as the replaced index needs to
+        // be regenerated
+        synchronized (segmentLock) {
+            // Overwrite new with new-0; potentially leaving old behind which is fine as it's values
+            // are safely merged into new-0
+            Files.move(outputFile, newerFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            segments.put(newerFile.toString(), new SSTable(newerFile, configuration));
+            segments.remove(olderFile.toString());
+        }
+
+        // Finally, delete old
+        Files.delete(olderFile);
+    }
+
+    private void purgeOrphanedSegments() throws IOException {
+        var pathMatcher = FileSystems.getDefault().getPathMatcher(MessageFormat.format("regex:{0}/{1}\\.[0-9]*\\-0$", filePath, fileName));
+        try (var files = Files.newDirectoryStream(filePath, pathMatcher::matches)) {
+            for (var file : files) {
+                try { Files.deleteIfExists(file); } catch (IOException e) { }
             }
         }
     }
