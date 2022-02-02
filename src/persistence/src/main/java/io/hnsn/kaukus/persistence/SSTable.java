@@ -14,7 +14,6 @@ import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
-import lombok.Setter;
 
 public class SSTable {
     private final Path filePath;
@@ -22,6 +21,7 @@ public class SSTable {
 
     private IndexTuple[] index;
     private Object indexLock = new Object();
+    private final static Decoder decoder = Base64.getDecoder();
 
     public SSTable(Path filePath, SSTableConfiguration configuration) {
         this.filePath = filePath;
@@ -64,14 +64,9 @@ public class SSTable {
                     return index[middle].isTombstone ? SSTableResult.TOMBSTONE : SSTableResult.EMPTY;
                 }
 
-                // Grab the bytes
-                var value = getByteValueAtOffset(index[middle].getIndex());
-
-                // Double check it isn't a tombstone
-                if (value == null) return SSTableResult.TOMBSTONE;
-
-                // TODO: Probably clean up to reduce object creation?
-                return new SSTableResult(configuration.serializerFactory.createDeserializer(new ByteArrayInputStream(value)).read());
+                var tokens = getByteValueAtOffset(index[middle].getIndex());
+                if (tokens.isTombstone) return SSTableResult.TOMBSTONE;
+                return new SSTableResult(tokens.getDecodedValue(configuration.serializerFactory));
             }
             else if (compare > 0) right = middle;
             else if (compare < 0) left = middle + 1;
@@ -90,18 +85,17 @@ public class SSTable {
             while (offset < end) {
                 var line = randomAccessFile.readLine();
                 offset += line.length() + 1;
-                var tokens = line.split(":");
-                var lineKey = new String(Base64.getDecoder().decode(tokens[0]));
+                var tokens = LineResult.of(line);
+                var decodedLineKey = tokens.getDecodedKey(decoder);
                 
-                if (lineKey.compareTo(key) == 0) {
+                if (decodedLineKey.compareTo(key) == 0) {
                     if (existsOnly == true) {
                         // Existence only; skip deserializing the value
-                        return tokens.length == 1 ? SSTableResult.TOMBSTONE : SSTableResult.EMPTY;
+                        return tokens.isTombstone ? SSTableResult.TOMBSTONE : SSTableResult.EMPTY;
                     }
 
                     // Read and deserialize
-                    var lineValue = configuration.serializerFactory.createDeserializer(new ByteArrayInputStream(tokens[1].getBytes())).read();
-                    return new SSTableResult(lineValue);
+                    return new SSTableResult(tokens.getDecodedValue(configuration.serializerFactory));
                 }
             }
         }
@@ -109,23 +103,55 @@ public class SSTable {
         return null;
     }
 
-    private byte[] getByteValueAtOffset(long offset) {
+    private LineResult getByteValueAtOffset(long offset) {
         try (var randomAccessFile = new RandomAccessFile(filePath.toString(), "r")) {
             randomAccessFile.seek(offset);
 
             // Read and split the line
             var line = randomAccessFile.readLine();
-            offset += line.length();
-            var tokens = line.split(":");
-
-            // Tombstone marker
-            if (tokens.length == 1) return null;
-
-            // Return the bytes
-            return tokens[1].getBytes();
+            return LineResult.of(line);
         } catch (IOException e) {
             // TODO
             throw new RuntimeException(e);
+        }
+    }
+
+    private static class LineResult {
+        public String key;
+        public String value;
+        public boolean isTombstone;
+
+        private LineResult(String key, String value, boolean isTombstone) {
+            this.key = key;
+            this.value = value;
+            this.isTombstone = isTombstone;
+        }
+
+        public static LineResult of(String line) {
+            var isTombstone = !line.contains(":");
+            String key, value;
+            if (isTombstone) {
+                key = line;
+                value = null;
+            }
+            else if (line.charAt(line.length() - 1) == ':') {
+                key = line.substring(0, line.length() - 1);
+                value = "";
+            }
+            else {
+                var tokens = line.split(":");
+                key = tokens[0];
+                value = tokens[1];
+            }
+            return new LineResult(key, value, isTombstone);
+        }
+
+        public String getDecodedKey(Decoder decoder) {
+            return new String(decoder.decode(key));
+        }
+
+        public String getDecodedValue(SerializerFactory serializerFactory) throws IOException {
+            return serializerFactory.createDeserializer(new ByteArrayInputStream(value.getBytes())).read();
         }
     }
 
@@ -156,7 +182,6 @@ public class SSTable {
 
     public static void compact(Path olderPath, Path newPath, Path outputPath) throws FileNotFoundException, IOException {
         try (var outputStream = new FileOutputStream(outputPath.toString())) {
-            final var decoder = Base64.getDecoder();
             var olderEntry = new Entry();
             var newerEntry = new Entry();
             var olderIter = Files.lines(olderPath).map(line -> olderEntry.set(decoder, line)).iterator();

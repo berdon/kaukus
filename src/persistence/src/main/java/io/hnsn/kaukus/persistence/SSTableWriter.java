@@ -26,7 +26,6 @@ public class SSTableWriter implements Closeable, Flushable {
 
     public <TValue> void writeTombstone(String key) throws IOException {
         out.write(encoder.encode(key.getBytes()));
-        out.write(':');
         out.write('\n');
     }
 

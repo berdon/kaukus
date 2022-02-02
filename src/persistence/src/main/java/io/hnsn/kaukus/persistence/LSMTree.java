@@ -11,6 +11,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.InvalidParameterException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -138,7 +139,10 @@ public class LSMTree implements Closeable {
     }
 
     public <TValue> void set(String key, String value) {
-        if (value == null) throw new NullPointerException("Value cannot be null");
+        if (key == null) throw new InvalidParameterException("Key cannot be null");
+        if (key.isEmpty()) throw new InvalidParameterException("Key cannot be empty");
+        if (value == null) throw new InvalidParameterException("Value cannot be null");
+
         walWrite(key, value);
         memoryMap.put(key, new LSMTreeValue(value));
     }

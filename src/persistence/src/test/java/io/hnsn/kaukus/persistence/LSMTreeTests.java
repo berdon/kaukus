@@ -3,6 +3,7 @@ package io.hnsn.kaukus.persistence;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
@@ -13,6 +14,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.InvalidParameterException;
 import java.text.MessageFormat;
 import java.util.Base64;
 import java.util.stream.Collectors;
@@ -223,5 +225,43 @@ public class LSMTreeTests {
 
         assertTrue(lsmTree.containsKey("some-older-untouched-value"));
         assertEquals("legacy value", lsmTree.get("some-older-untouched-value"));
+    }
+
+    @Test
+    public void putNullValueThrows() throws IOException {
+        var filePath = Path.of(File.createTempFile("test", null).getPath());
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
+            assertThrows(InvalidParameterException.class, () -> {
+                lsmTree.set("some-null-value", null);
+            });
+        }
+    }
+
+    @Test
+    public void canStoreEmptyStringValue() throws IOException {
+        var filePath = Path.of(File.createTempFile("test", null).getPath());
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
+            lsmTree.set("some-empty-value", "");
+        }
+    }
+
+    @Test
+    public void putNullKeyThrows() throws IOException {
+        var filePath = Path.of(File.createTempFile("test", null).getPath());
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
+            assertThrows(InvalidParameterException.class, () -> {
+                lsmTree.set(null, "some-null-value");
+            });
+        }
+    }
+
+    @Test
+    public void emptyKeyThrows() throws IOException {
+        var filePath = Path.of(File.createTempFile("test", null).getPath());
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
+            assertThrows(InvalidParameterException.class, () -> {
+                lsmTree.set("", "some-empty-value");
+            });
+        }
     }
 }

@@ -2,6 +2,8 @@ package io.hnsn.kaukus.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
@@ -46,6 +48,51 @@ public class SSTableWriterTests {
         var sstable = new SSTable(filePath, SSTableConfiguration.builder().build());
         assertTrue(sstable.containsKey("some-deleted-value").isHasKey());
         assertTrue(sstable.containsKey("some-deleted-value").isTombstone());
+    }
+
+    @Test
+    public void writeNullValueThrows() throws IOException {
+        var tempFile = File.createTempFile("test", null);
+        var outputStream = new FileOutputStream(tempFile);
+        try (var sstableWriter = new SSTableWriter(outputStream, new Base64SerializerFactory())) {
+            assertThrows(NullPointerException.class, () -> {
+                sstableWriter.write("some-key", null);
+            });
+        }
+    }
+
+    @Test
+    public void canWriteEmptyString() throws IOException {
+        var tempFile = File.createTempFile("test", null);
+        var filePath = Path.of(tempFile.getPath());
+        var outputStream = new FileOutputStream(tempFile);
+        try (var sstableWriter = new SSTableWriter(outputStream, new Base64SerializerFactory())) {
+            sstableWriter.write("some-empty-value", "");
+            sstableWriter.flush();
+        }
+        
+        var sstable = new SSTable(filePath, SSTableConfiguration.builder().build());
+        assertTrue(sstable.containsKey("some-empty-value").isHasKey());
+        assertEquals("", sstable.tryGetValue("some-empty-value").getValue());
+    }
+
+    @Test
+    public void canWriteEmptyStringAndTombstone() throws IOException {
+        var tempFile = File.createTempFile("test", null);
+        var filePath = Path.of(tempFile.getPath());
+        var outputStream = new FileOutputStream(tempFile);
+        try (var sstableWriter = new SSTableWriter(outputStream, new Base64SerializerFactory())) {
+            sstableWriter.write("some-empty-value", "");
+            sstableWriter.writeTombstone("some-tombstone");
+            sstableWriter.flush();
+        }
+        
+        var sstable = new SSTable(filePath, SSTableConfiguration.builder().build());
+        assertTrue(sstable.containsKey("some-empty-value").isHasKey());
+        assertEquals("", sstable.tryGetValue("some-empty-value").getValue());
+
+        assertTrue(sstable.containsKey("some-tombstone").isHasKey());
+        assertNull(sstable.tryGetValue("some-tombstone").getValue());
     }
 
     // @Test

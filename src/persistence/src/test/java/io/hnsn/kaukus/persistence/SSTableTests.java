@@ -40,6 +40,22 @@ public class SSTableTests {
     }
 
     @Test
+    public void canReadEmptyString() throws URISyntaxException, FileNotFoundException, IOException {
+        var filePath = Paths.get(getClass().getClassLoader().getResource("SSTableEmptyStringTest.0").toURI());
+        var sstable = new SSTable(filePath, new SSTableConfiguration.SSTableConfigurationBuilder().build());
+        assertTrue(sstable.containsKey("some-empty-value").isHasKey());
+        assertEquals("", sstable.tryGetValue("some-empty-value").getValue());
+    }
+
+    @Test
+    public void canReadTombstone() throws URISyntaxException, FileNotFoundException, IOException {
+        var filePath = Paths.get(getClass().getClassLoader().getResource("SSTableTombstoneTest.0").toURI());
+        var sstable = new SSTable(filePath, new SSTableConfiguration.SSTableConfigurationBuilder().build());
+        assertTrue(sstable.containsKey("some-deleted-value").isHasKey());
+        assertNull(sstable.tryGetValue("some-deleted-value").getValue());
+    }
+
+    @Test
     public void canCompactInterleavedLines() throws URISyntaxException, IOException {
         var olderFile = Paths.get(getClass().getClassLoader().getResource("SSTableCompactTest.0").toURI());
         var newerFile = Paths.get(getClass().getClassLoader().getResource("SSTableCompactTest.1").toURI());
