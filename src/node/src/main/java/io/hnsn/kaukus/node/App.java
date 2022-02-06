@@ -3,27 +3,52 @@
  */
 package io.hnsn.kaukus.node;
 
+import java.io.IOException;
+import java.time.LocalDateTime;
+
 import com.google.inject.Guice;
 import com.google.inject.Inject;
+import com.google.inject.Injector;
 
 import io.hnsn.kaukus.node.configuration.NodeConfiguration;
+import io.hnsn.kaukus.node.configuration.SystemStore;
+import io.hnsn.kaukus.node.guiceModules.AppModule;
 import io.hnsn.kaukus.node.guiceModules.NodeModule;
+import io.hnsn.kaukus.persistence.LSMTree;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class App {
-    private NodeConfiguration _configuration;
+    private static Injector LAUNCH_INJECTOR;
 
-    public static void main(String[] args) {
-        var injector = Guice.createInjector(new NodeModule());
-        var app = injector.getInstance(App.class);
+    private final NodeConfiguration configuration;
+    private SystemStore systemStore;
+    private Injector applicationInjector;
+
+    public static void main(String[] args) throws IOException {
+        LAUNCH_INJECTOR = Guice.createInjector(new NodeModule());
+        var app = LAUNCH_INJECTOR.getInstance(App.class);
         app.Start();
     }
 
     @Inject
     App(NodeConfiguration configuration) {
-        _configuration = configuration;
+        this.configuration = configuration;
     }
 
-    private void Start() {
-        
+    private void Start() throws IOException {
+        var systemStoreLSMTree = LSMTree.openOrCreate(configuration.getSystemStorePath());
+
+        log.info("Compacting system store...");
+        systemStoreLSMTree.compact();
+
+        applicationInjector = LAUNCH_INJECTOR.createChildInjector(new AppModule(systemStoreLSMTree));
+        systemStore = applicationInjector.getInstance(SystemStore.class);
+
+        var lastStartedAt = systemStore.getLastStartedAt();
+        log.info("Last started at [{}]", lastStartedAt);
+
+        systemStore.setLastStartedAt(LocalDateTime.now());
+        systemStore.close();
     }
 }

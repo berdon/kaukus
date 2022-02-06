@@ -6,7 +6,6 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.file.CopyOption;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,8 +20,6 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -45,6 +42,15 @@ public class LSMTree implements Closeable {
     // Test Hooks
     public static LSMTree openOrCreate(Path filePath) {
         var lsmTree = new LSMTree(filePath);
+
+        if (!Files.exists(lsmTree.filePath)) {
+            try {
+                Files.createDirectories(lsmTree.filePath);
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                throw new RuntimeException(e);
+            }
+        }
 
         // Delete any orphaned merge results "file.1-0"
         try {
@@ -138,7 +144,7 @@ public class LSMTree implements Closeable {
         return null;
     }
 
-    public <TValue> void set(String key, String value) {
+    public void put(String key, String value) {
         if (key == null) throw new InvalidParameterException("Key cannot be null");
         if (key.isEmpty()) throw new InvalidParameterException("Key cannot be empty");
         if (value == null) throw new InvalidParameterException("Value cannot be null");
@@ -295,6 +301,7 @@ public class LSMTree implements Closeable {
     public void close() throws IOException {
         if (walOutputStream != null) walOutputStream.close();
         if (walSerializer != null) walSerializer.close();
+        flush();
     }
 
     @Getter

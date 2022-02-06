@@ -7,10 +7,21 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":persistence"))
+    implementation(project(":utilities"))
+
+    implementation("org.slf4j:slf4j-api:1.7.30")
+    implementation("org.slf4j:slf4j-simple:1.7.30")
+
     implementation("org.apache.commons:commons-text")
     implementation("com.typesafe:config:1.4.1")
-    implementation(project(":utilities"))
     implementation("com.google.inject:guice:5.1.0")
+
+    compileOnly("org.projectlombok:lombok:1.18.22")
+	annotationProcessor("org.projectlombok:lombok:1.18.22")
+
+    testCompileOnly("org.projectlombok:lombok:1.18.22")
+	testAnnotationProcessor("org.projectlombok:lombok:1.18.22")
 }
 
 application {

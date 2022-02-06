@@ -39,9 +39,9 @@ public class LSMTreeTests {
         var segmentFilePath = Paths.get(getClass().getClassLoader().getResource("SSTableTest.0").toURI()).toString();
         var filePath = Paths.get(segmentFilePath.substring(0, segmentFilePath.length() - 2));
         try (var lsmTree = LSMTree.openOrCreate(filePath)) {
-            lsmTree.set("some-other-key", "a value");
+            lsmTree.put("some-other-key", "a value");
             assertEquals("a value", lsmTree.get("some-other-key"));
-            lsmTree.set("some-other-key2", "a value2");
+            lsmTree.put("some-other-key2", "a value2");
             assertEquals("a value2", lsmTree.get("some-other-key2"));
         }
     }
@@ -62,17 +62,17 @@ public class LSMTreeTests {
         var filePath = Path.of(tempFile.getPath());
         try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             for (var i = 0; i < 10; i++) {
-                lsmTree.set(MessageFormat.format("some-key-{0}", i), MessageFormat.format("some-value-{0}", i));
+                lsmTree.put(MessageFormat.format("some-key-{0}", i), MessageFormat.format("some-value-{0}", i));
             }
 
             // Ensure base64/padding serializes correctly
-            lsmTree.set("k", "v");
-            lsmTree.set("ke", "v");
-            lsmTree.set("key", "v");
-            lsmTree.set("key1", "va");
-            lsmTree.set("key2", "val");
-            lsmTree.set("key3", "valu");
-            lsmTree.set("key4", "value");
+            lsmTree.put("k", "v");
+            lsmTree.put("ke", "v");
+            lsmTree.put("key", "v");
+            lsmTree.put("key1", "va");
+            lsmTree.put("key2", "val");
+            lsmTree.put("key3", "valu");
+            lsmTree.put("key4", "value");
 
 
             lsmTree.flush();
@@ -115,11 +115,11 @@ public class LSMTreeTests {
         var segmentFilePath = Paths.get(getClass().getClassLoader().getResource("SSTableTest.0").toURI()).toString();
         var filePath = Paths.get(segmentFilePath.substring(0, segmentFilePath.length() - 2));
         try (var lsmTree = LSMTree.openOrCreate(filePath)) {
-            lsmTree.set("some-other-key", "a value");
-            lsmTree.set("some-other-key2", "a value 2");
-            lsmTree.set("some-other-key3", "a value 3");
+            lsmTree.put("some-other-key", "a value");
+            lsmTree.put("some-other-key2", "a value 2");
+            lsmTree.put("some-other-key3", "a value 3");
             lsmTree.remove("some-other-key2");
-            lsmTree.set("some-other-key3", "a new value 3");
+            lsmTree.put("some-other-key3", "a new value 3");
 
             var decoder = Base64.getDecoder();
             var lines = Files.lines(filePath).map(line -> {
@@ -232,7 +232,7 @@ public class LSMTreeTests {
         var filePath = Path.of(File.createTempFile("test", null).getPath());
         try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             assertThrows(InvalidParameterException.class, () -> {
-                lsmTree.set("some-null-value", null);
+                lsmTree.put("some-null-value", null);
             });
         }
     }
@@ -241,7 +241,7 @@ public class LSMTreeTests {
     public void canStoreEmptyStringValue() throws IOException {
         var filePath = Path.of(File.createTempFile("test", null).getPath());
         try (var lsmTree = LSMTree.openOrCreate(filePath)) {
-            lsmTree.set("some-empty-value", "");
+            lsmTree.put("some-empty-value", "");
         }
     }
 
@@ -250,7 +250,7 @@ public class LSMTreeTests {
         var filePath = Path.of(File.createTempFile("test", null).getPath());
         try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             assertThrows(InvalidParameterException.class, () -> {
-                lsmTree.set(null, "some-null-value");
+                lsmTree.put(null, "some-null-value");
             });
         }
     }
@@ -260,7 +260,7 @@ public class LSMTreeTests {
         var filePath = Path.of(File.createTempFile("test", null).getPath());
         try (var lsmTree = LSMTree.openOrCreate(filePath)) {
             assertThrows(InvalidParameterException.class, () -> {
-                lsmTree.set("", "some-empty-value");
+                lsmTree.put("", "some-empty-value");
             });
         }
     }
