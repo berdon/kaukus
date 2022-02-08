@@ -1,4 +1,4 @@
-package io.hnsn.kaukus.node.configuration;
+package io.hnsn.kaukus.configuration;
 
 import java.nio.file.Path;
 

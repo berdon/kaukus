@@ -1,26 +1,31 @@
-package io.hnsn.kaukus.node.configuration;
+package io.hnsn.kaukus.configuration;
 
 import java.nio.file.Path;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public class SimpleNodeConfiguration implements NodeConfiguration {
-    private final Config _config;
+import io.hnsn.kaukus.parameters.NodeParameters;
+import io.hnsn.kaukus.std.NullCoallesce;
 
-    public SimpleNodeConfiguration(Config config) {
+public class SimpleNodeConfiguration implements NodeConfiguration {
+    private final Config config;
+    private final NodeParameters parameters;
+
+    public SimpleNodeConfiguration(Config config, NodeParameters parameters) {
         config.checkValid(ConfigFactory.defaultReference(), "node");
-        _config = config;
+        this.config = config;
+        this.parameters = parameters;
     }
 
     @Override
     public String getIdentifier() {
-        return _config.getString(KEY_IDENTITIFIER);
+        return NullCoallesce.of(parameters.getIdentifier(), config.getString(KEY_IDENTITIFIER));
     }
 
     @Override
     public Path getSystemStorePath() {
-        var path = _config.getString(KEY_SYSTEM_STORE);
+        var path = config.getString(KEY_SYSTEM_STORE);
         if (path == null || path.isBlank()) return Path.of(DEFAULT_SYSTEM_STORE);
         return Path.of(path);
     }

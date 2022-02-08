@@ -14,9 +14,10 @@
             "type": "java",
             "name": "Launch App",
             "request": "launch",
-            "mainClass": "io.hnsn.kaukus.node.App",
+            "mainClass": "io.hnsn.kaukus.App",
             "projectName": "node",
-            "console": "internalConsole",
+            "console": "externalTerminal",
+            "args": "--verbose",
             "env": {}
         }
     ]

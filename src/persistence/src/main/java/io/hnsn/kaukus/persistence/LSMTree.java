@@ -173,20 +173,21 @@ public class LSMTree implements Closeable {
                         return a.getKey().compareTo(b.getKey());
                     });
 
-                    var nextSegmentFileName = filePath.resolve(fileName + "." + segments.size()).toString();
+                    var nextSegmentIndex = segments.size() == 0 ? 0 : Integer.parseInt(segments.lastKey().substring(segments.lastKey().lastIndexOf('.') + 1)) + 1;
+                    var nextSegmentFileName = filePath.resolve(fileName + "." + nextSegmentIndex).toString();
                     try (var out = new FileOutputStream(nextSegmentFileName); var sstableWriter = new SSTableWriter(out, configuration.serializerFactory)) {
                         for (var pair : entries) {
                             var key = pair.getKey();
                             var lsmTreeValue = pair.getValue();
 
                             // Write out the entry
-                            if (lsmTreeValue != null) sstableWriter.write(key, lsmTreeValue.value);
+                            if (lsmTreeValue != null && lsmTreeValue.value != null) sstableWriter.write(key, lsmTreeValue.value);
                             else sstableWriter.writeTombstone(key);
                         }
                     }
 
                     // Delete the wall
-                    Files.delete(walFile);
+                    Files.deleteIfExists(walFile);
                     memoryMap.clear();
                     segments.put(nextSegmentFileName, new SSTable(Path.of(nextSegmentFileName), configuration));
                 }
