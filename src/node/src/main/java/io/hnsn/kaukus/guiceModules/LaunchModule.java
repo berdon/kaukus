@@ -4,6 +4,7 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
 import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigParseOptions;
 
 import io.hnsn.kaukus.configuration.NodeConfiguration;
 import io.hnsn.kaukus.configuration.SimpleNodeConfiguration;
@@ -17,7 +18,7 @@ public class LaunchModule extends AbstractModule {
 
     @Provides
     NodeConfiguration provideNodeConfiguration() {
-        return new SimpleNodeConfiguration(ConfigFactory.load(), parameters);
+        return new SimpleNodeConfiguration(ConfigFactory.load(ConfigParseOptions.defaults()), parameters);
     }
 
     @Singleton @Provides

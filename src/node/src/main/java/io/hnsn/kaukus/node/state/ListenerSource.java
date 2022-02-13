@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArraySet;
 
+@SuppressWarnings("unchecked")
 public class ListenerSource {
     private final Map<Class<?>, CopyOnWriteArraySet<?>> listeners = new HashMap<>();
 

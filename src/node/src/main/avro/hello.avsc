@@ -1,0 +1,10 @@
+{
+    "name": "Hello",
+    "namespace": "io.hnsn.kaukus.encoding",
+    "type": "record",
+    "fields": [
+        { "name": "sourceAddress", "type": "string" },
+        { "name": "sourcePort", "type": "int" },
+        { "name": "version", "type": "string" }
+    ]
+}

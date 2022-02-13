@@ -6,6 +6,7 @@ import org.gradle.jvm.tasks.Jar
 
 plugins {
     id("io.hnsn.kaukus.java-application-conventions")
+    id("com.github.davidmc24.gradle.plugin.avro") version "1.3.0"
 }
 
 dependencies {
@@ -27,6 +28,9 @@ dependencies {
 
     // Dependency Injection
     implementation("com.google.inject:guice:5.1.0")
+
+    // Avro / Binary Encoding
+    implementation("org.apache.avro:avro:1.11.0")
 
     compileOnly("org.projectlombok:lombok:1.18.22")
 	annotationProcessor("org.projectlombok:lombok:1.18.22")

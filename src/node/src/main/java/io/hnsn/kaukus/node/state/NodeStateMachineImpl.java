@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.inject.Inject;
@@ -19,28 +22,55 @@ import org.slf4j.Logger;
 import io.hnsn.kaukus.configuration.NodeConfiguration;
 import io.hnsn.kaukus.configuration.SystemStore;
 import io.hnsn.kaukus.guice.LoggerProvider;
+import io.hnsn.kaukus.guiceModules.NodeModule.SharedExecutor;
 import io.hnsn.kaukus.node.OnUnrecoverableErrorListener;
+import io.hnsn.kaukus.node.agents.ClientAgent;
+import io.hnsn.kaukus.node.agents.DiscoveryAgent;
+import io.hnsn.kaukus.node.agents.OnBroadcastReceivedListener;
+import io.hnsn.kaukus.node.agents.OnClientConnectedListener;
+import io.hnsn.kaukus.node.agents.ServerAgent;
 import io.hnsn.kaukus.std.NullCoallesce;
 import io.hnsn.kaukus.std.StringUtils;
 
 public class NodeStateMachineImpl implements NodeStateMachine {
     private final ExecutorService executorService;
+    private final ScheduledExecutorService scheduledExecutorService;
     private final SystemStore systemStore;
     private final NodeConfiguration configuration;
     private final StateMachine<NodeState, NodeStateTrigger> stateMachine;
     private final Logger log;
-    private final AtomicBoolean hasLoaded = new AtomicBoolean(false);
 
+    private final Semaphore canDispose = new Semaphore(0);
+    private final AtomicBoolean hasLoaded = new AtomicBoolean(false);
     private final ListenerSource listeners = new ListenerSource();
+
+    private final ServerAgent serverAgent;
+    private final DiscoveryAgent discoveryAgent;
+    private final ClientAgent clientAgent;
+
+    private AtomicBoolean isTerminating = new AtomicBoolean(false);
 
     private String nodeIdentifier;
 
     @Inject
-    public NodeStateMachineImpl(ExecutorService executorService, SystemStore systemStore, NodeConfiguration configuration, LoggerProvider loggerProvider) {
+    public NodeStateMachineImpl(
+        @SharedExecutor ExecutorService executorService,
+        @SharedExecutor ScheduledExecutorService scheduledExecutorService,
+        SystemStore systemStore,
+        NodeConfiguration configuration,
+        LoggerProvider loggerProvider,
+        ServerAgent serverAgent,
+        DiscoveryAgent discoveryAgent,
+        ClientAgent clientAgent
+    ) {
         this.executorService = executorService;
+        this.scheduledExecutorService = scheduledExecutorService;
         this.systemStore = systemStore;
         this.configuration = configuration;
         this.log = loggerProvider.get("NodeState");
+        this.serverAgent = serverAgent;
+        this.discoveryAgent = discoveryAgent;
+        this.clientAgent = clientAgent;
 
         var stateMachineConfig = new StateMachineConfig<NodeState, NodeStateTrigger>();
         stateMachineConfig.setTriggerParameters(NodeStateTrigger.UnrecoverableError, String.class, Throwable.class);
@@ -137,9 +167,7 @@ public class NodeStateMachineImpl implements NodeStateMachine {
 
         log.info("Kaukus node [{}] is shut down; final state = {}", nodeIdentifier, stateMachine.getState());
 
-        synchronized(this) {
-            notifyAll();
-        }
+        canDispose.release();
     }
 
     @Override
@@ -176,10 +204,7 @@ public class NodeStateMachineImpl implements NodeStateMachine {
 
         log.info("Kaukus node [{}] is shut down; final state = {}", nodeIdentifier, stateMachine.getState());
 
-        synchronized(this) {
-            notifyAll();
-        }
-
+        canDispose.release();
         listeners.get(OnUnrecoverableErrorListener.class).forEach(listener -> listener.onError(message, throwable));
     }
 
@@ -202,7 +227,25 @@ public class NodeStateMachineImpl implements NodeStateMachine {
             log.info("Kaukus node [{}] last started at {}", nodeIdentifier, lastStartedAt);
         }
 
-        executorService.submit(() -> { stateMachine.fire(NodeStateTrigger.Ready); });
+        try {
+            var address = configuration.getSystemAddress();
+            var port = configuration.getSystemPort();
+
+            log.info("Binding to {}:{}", address, port);
+            serverAgent.start();
+            log.info("Successfully bound to {}:{}", serverAgent.getBoundAddress(), serverAgent.getBoundPort());
+
+            discoveryAgent.start();
+            log.info("Listening on {}:{} for discovery broadcasts", discoveryAgent.getBoundAddress(), discoveryAgent.getBoundPort());
+
+            clientAgent.start();
+            log.info("Initializing client agent");
+
+            executorService.submit(() -> { stateMachine.fire(NodeStateTrigger.Ready); });
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            error("Error creating the system socket", e);
+        }
     }
 
     private void onRunning() {
@@ -218,14 +261,33 @@ public class NodeStateMachineImpl implements NodeStateMachine {
 
     @Override
     public synchronized void stop() {
-        executorService.submit(() -> { stateMachine.fire(NodeStateTrigger.Stop); });
         if (!stateMachine.isInState(NodeState.Stopped) && !stateMachine.isInState(NodeState.UnrecoverableError)) {
+            // Mark that we're terminating
+            isTerminating.set(true);
+
+            // Indicate that we're stopping
+            executorService.submit(() -> { stateMachine.fire(NodeStateTrigger.Stop); });
+
             try {
-                wait();
-            } catch (InterruptedException e) {
+                serverAgent.close();
+                discoveryAgent.close();
+                clientAgent.close();
+
+                // Wait for the notification that we can dispose
+                canDispose.acquire();
+            } catch (InterruptedException | IOException e) {
                 // TODO Auto-generated catch block
                 throw new RuntimeException(e);
             }
+
+            executorService.shutdown();
+            scheduledExecutorService.shutdown();
+
+            try { executorService.awaitTermination(250, TimeUnit.MILLISECONDS); } catch (InterruptedException e) { }
+            if (!executorService.isShutdown()) executorService.shutdownNow();
+
+            try { scheduledExecutorService.awaitTermination(250, TimeUnit.MILLISECONDS); } catch (InterruptedException e) { }
+            if (!scheduledExecutorService.isShutdown()) scheduledExecutorService.shutdownNow();
         }
     }
 
@@ -266,5 +328,35 @@ public class NodeStateMachineImpl implements NodeStateMachine {
     @Override
     public void unregisterIdentifierListener(OnIdentifierRegisteredListener listener) {
         listeners.get(OnIdentifierRegisteredListener.class).remove(listener);
+    }
+
+    @Override
+    public void registerStateChangedListener(OnStateChangedListener listener) {
+        listeners.get(OnStateChangedListener.class).add(listener);
+    }
+
+    @Override
+    public void unregisterStateChangedListener(OnStateChangedListener listener) {
+        listeners.get(OnStateChangedListener.class).remove(listener);
+    }
+
+    @Override
+    public void registerOnClientConnectedListener(OnClientConnectedListener listener) {
+        serverAgent.registerOnClientConnectedListener(listener);
+    }
+
+    @Override
+    public void unregisterOnClientConnectedListener(OnClientConnectedListener listener) {
+        serverAgent.unregisterOnClientConnectedListener(listener);
+    }
+
+    @Override
+    public void registerOnBroadcastReceivedListener(OnBroadcastReceivedListener listener) {
+        discoveryAgent.registerOnBroadcastReceivedListener(listener);
+    }
+
+    @Override
+    public void unregisterOnBroadcastReceivedListener(OnBroadcastReceivedListener listener) {
+        discoveryAgent.unregisterOnBroadcastReceivedListener(listener);
     }
 }

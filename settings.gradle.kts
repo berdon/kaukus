@@ -7,6 +7,13 @@
  * in the user manual at https://docs.gradle.org/7.3/userguide/multi_project_builds.html
  */
 
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
 rootProject.name = "kaukus"
 include("node", "persistence", "utilities")
 project(":node").projectDir = file("src/node")
