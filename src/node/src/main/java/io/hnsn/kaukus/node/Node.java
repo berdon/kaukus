@@ -13,7 +13,6 @@ import io.hnsn.kaukus.configuration.SystemStore;
 import io.hnsn.kaukus.guice.LoggerProvider;
 import io.hnsn.kaukus.node.agents.DiscoveryAgent;
 import io.hnsn.kaukus.node.agents.ServerAgent;
-import io.hnsn.kaukus.node.state.NodeState;
 import io.hnsn.kaukus.node.state.NodeStateMachine;
 
 public class Node implements Closeable {

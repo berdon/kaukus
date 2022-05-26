@@ -9,6 +9,7 @@ import io.hnsn.kaukus.parameters.NodeParameters;
 import io.hnsn.kaukus.std.NullCoallesce;
 
 public class SimpleNodeConfiguration implements NodeConfiguration {
+    private static final String KEY_VERSION = "node.version";
     private static final String KEY_IDENTITIFIER = "node.identifier";
     private static final String KEY_SYSTEM_STORE = "node.system.store";
     private static final String KEY_SYSTEM_PORT = "node.system.port";
@@ -28,6 +29,11 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
         config.checkValid(ConfigFactory.defaultReference(), "node");
         this.config = config;
         this.parameters = parameters;
+    }
+
+    @Override
+    public String getVersion() {
+        return (String) config.getAnyRef(KEY_VERSION);
     }
 
     @Override

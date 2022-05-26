@@ -12,6 +12,7 @@ public class LSMTreeSystemStore implements SystemStore {
     private static final String KEY_IDENTIFIER = "KEY_IDENTIFIER";
     private static final String KEY_STATE = "KEY_STATE";
     private static final String KEY_LAST_STARTED_AT = "KEY_LAST_STARTED_AT";
+    private static final String KEY_LAST_VERSION = "KEY_LAST_VERSION";
 
     private final LSMTree lsmTree;
 
@@ -51,6 +52,16 @@ public class LSMTreeSystemStore implements SystemStore {
         // TODO: Improve get/default perf
         if (!lsmTree.containsKey(KEY_LAST_STARTED_AT)) return null;
         return ZonedDateTime.parse(lsmTree.get(KEY_LAST_STARTED_AT)).toLocalDateTime();
+    }
+
+    @Override
+    public void setLastVersion(String version) throws IOException {
+        lsmTree.put(KEY_LAST_VERSION, version);
+    }
+
+    @Override
+    public String getLastVersion() {
+        return lsmTree.get(KEY_LAST_VERSION);
     }
 
     @Override

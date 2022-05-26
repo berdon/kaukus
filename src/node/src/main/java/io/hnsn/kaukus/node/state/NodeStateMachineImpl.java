@@ -118,6 +118,17 @@ public class NodeStateMachineImpl implements NodeStateMachine {
     private NodeState initializeState() {
         var lastStartedAt = systemStore.getLastStartedAt();
 
+        var version = configuration.getVersion();
+        var lastVersion = systemStore.getLastVersion();
+
+        log.info("Node version is {}; last version was {}", version, lastVersion);
+        try {
+            systemStore.setLastVersion(version);
+        } catch (IOException e) {
+            log.error("Failed to update last version to {}", lastVersion);
+            return NodeState.UnrecoverableError;
+        }
+
         nodeIdentifier = systemStore.getIdentifier();
         if (nodeIdentifier == null) {
             if (lastStartedAt != null) {

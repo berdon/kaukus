@@ -25,7 +25,12 @@ public class ClientAgentImpl implements ClientAgent {
 
     private ScheduledFuture<?> broadcastTask;
 
-    public ClientAgentImpl(NodeConfiguration configuration, ServerAgent serverAgent, LoggerProvider loggerProvider, ScheduledExecutorService executorService) {
+    public ClientAgentImpl(
+        NodeConfiguration configuration,
+        ServerAgent serverAgent,
+        LoggerProvider loggerProvider,
+        ScheduledExecutorService executorService
+    ) {
         this.configuration = configuration;
         this.serverAgent = serverAgent;
         this.executorService = executorService;
@@ -35,8 +40,8 @@ public class ClientAgentImpl implements ClientAgent {
     @Override
     public void start() throws AgentException {
         broadcastTask = this.executorService.schedule(() -> {
-                // Send out a broadcast
-            var helloPacket = new Hello(serverAgent.getBoundAddress().getHostAddress(), serverAgent.getBoundPort(), "0.0.1");
+            // Send out a broadcast
+            var helloPacket = new Hello(serverAgent.getBoundAddress().getHostAddress(), serverAgent.getBoundPort(), configuration.getVersion());
             var datumWriter = new SpecificDatumWriter<>(Hello.class);
             var buffer = new ByteArrayOutputStream();
             try {
@@ -48,7 +53,7 @@ public class ClientAgentImpl implements ClientAgent {
 
                 var socket = new DatagramSocket();
                 
-                var group = InetAddress.getByName("230.0.0.0");
+                var group = InetAddress.getByName(configuration.getBroadcastAddress());
                 var packet = new DatagramPacket(buffer.toByteArray(), buffer.toByteArray().length, group, configuration.getBroadcastPort());
 
                 socket.send(packet);

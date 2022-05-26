@@ -15,4 +15,7 @@ public interface SystemStore extends Closeable {
 
     void setLastStartedAt(LocalDateTime time) throws IOException;
     LocalDateTime getLastStartedAt();
+
+    void setLastVersion(String version) throws IOException;
+    String getLastVersion();
 }

@@ -24,11 +24,35 @@ import java.util.concurrent.ConcurrentHashMap;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Log Structured Merge Tree (LSM-Tree)
+ * Keeps an internal cache (map for now) of key/value pairs. Writes are added to a
+ * WAL-file that is flushed to disk immediately and, as needed, flushed out to
+ * String Sorted Tables (SSTables). Reads check the in-memory cache first and then
+ * walk backwards through the available SSTables.
+ */
 public class LSMTree implements Closeable {
+    /**
+     * Full path of the directory containing the SSTables and WAL File.
+     */
     private final Path filePath;
+    /**
+     * The filename of the LSMTree which is used for generating SSTable file
+     * names.
+     */
     private final Path fileName;
+    /**
+     * Full path to be used for the WAL file; this is actually:
+     * `filePath + fileName`
+     */
     private final Path walFile;
+    /**
+     * In-memory cache of key/value pairs.
+     */
     private final Map<String, LSMTreeValue> memoryMap = new ConcurrentHashMap<>();
+    /**
+     * Configuration for the internal SSTables.
+     */
     private final SSTableConfiguration configuration = SSTableConfiguration.builder().build();
 
     // Lazy
@@ -39,7 +63,12 @@ public class LSMTree implements Closeable {
     private final Object walLock = new Object();
     private final Encoder encoder = Base64.getEncoder();
 
-    // Test Hooks
+    /**
+     * Opens of creates a new LSMTree. This is a blocking call as it handles
+     * loading any unwritten data from the WAL file.
+     * @param filePath
+     * @return
+     */
     public static LSMTree openOrCreate(Path filePath) {
         var lsmTree = new LSMTree(filePath);
 
@@ -67,12 +96,20 @@ public class LSMTree implements Closeable {
         return lsmTree;
     }
     
+    /**
+     * Private constructor; use {@code}openOrCreate(){@code}
+     * @param filePath
+     */
     private LSMTree(Path filePath) {
         this.filePath = filePath.getParent();
         fileName = filePath.getName(filePath.getNameCount() - 1);
         walFile = filePath;
     }
 
+    /**
+     * Reads each line of an unprocessed WAL file and updates the in-memory
+     * cache.
+     */
     private void rebuildIndex() {
         try {
             final var decoder = Base64.getDecoder();
@@ -96,6 +133,11 @@ public class LSMTree implements Closeable {
         }
     }
 
+    /**
+     * Returns true if the key is contained within the LSMTree.
+     * @param key The key to search for
+     * @return True if the key is contained within the LSMTree; false otherwise
+     */
     public boolean containsKey(String key) {
         if (memoryMap.containsKey(key)) {
             var lsmTreeValue = memoryMap.get(key);
@@ -119,6 +161,12 @@ public class LSMTree implements Closeable {
         return false;
     }
 
+    /**
+     * Returns the value associated with the key or null if it is not set in
+     * the LSMTree.
+     * @param key The key to search for
+     * @return The value associated or null
+     */
     public String get(String key) {
         if (memoryMap.containsKey(key)) {
             var lsmTreeValue = memoryMap.get(key);
@@ -144,6 +192,11 @@ public class LSMTree implements Closeable {
         return null;
     }
 
+    /**
+     * Associates a value with a key. {@code}value{@code} cannot be null.
+     * @param key The key to associate the value with
+     * @param value The value to be associated
+     */
     public void put(String key, String value) {
         if (key == null) throw new InvalidParameterException("Key cannot be null");
         if (key.isEmpty()) throw new InvalidParameterException("Key cannot be empty");
@@ -153,11 +206,19 @@ public class LSMTree implements Closeable {
         memoryMap.put(key, new LSMTreeValue(value));
     }
 
+    /**
+     * Removes a key/value pair from the LSMTree.
+     * @param key
+     */
     public void remove(String key) {
         walDelete(key);
         memoryMap.put(key, LSMTreeValue.TOMBSTONE);
     }
 
+    /**
+     * Flushes the LSMTree to disk; this writes all entries in the in-memory
+     * cache out to a new SSTable.
+     */
     public void flush() {
         // Write the sorted map to a new segment file
         synchronized (segmentLock) {
@@ -176,6 +237,7 @@ public class LSMTree implements Closeable {
                     var nextSegmentIndex = segments.size() == 0 ? 0 : Integer.parseInt(segments.lastKey().substring(segments.lastKey().lastIndexOf('.') + 1)) + 1;
                     var nextSegmentFileName = filePath.resolve(fileName + "." + nextSegmentIndex).toString();
                     try (var out = new FileOutputStream(nextSegmentFileName); var sstableWriter = new SSTableWriter(out, configuration.serializerFactory)) {
+                        // TODO: Only write out entries that have changed from their last SSTable entry
                         for (var pair : entries) {
                             var key = pair.getKey();
                             var lsmTreeValue = pair.getValue();
@@ -198,6 +260,11 @@ public class LSMTree implements Closeable {
         }
     }
 
+    /**
+     * Blocking call that compacts all SSTables into a single SSTable.
+     * @throws FileNotFoundException
+     * @throws IOException
+     */
     public void compact() throws FileNotFoundException, IOException {
         var segments = getSegments();
         while (segments.size() > 1) {

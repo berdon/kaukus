@@ -3,6 +3,7 @@ package io.hnsn.kaukus.configuration;
 import java.nio.file.Path;
 
 public interface NodeConfiguration {
+    public String getVersion();
     public String getIdentifier();
     public Path getSystemStorePath();
     public int getSystemPort();
