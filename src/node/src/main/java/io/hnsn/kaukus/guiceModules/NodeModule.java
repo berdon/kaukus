@@ -19,12 +19,14 @@ import io.hnsn.kaukus.configuration.NodeConfiguration;
 import io.hnsn.kaukus.configuration.SystemStore;
 import io.hnsn.kaukus.guice.LoggerProvider;
 import io.hnsn.kaukus.node.OnUnrecoverableErrorListener;
-import io.hnsn.kaukus.node.agents.ClientAgent;
-import io.hnsn.kaukus.node.agents.ClientAgentImpl;
-import io.hnsn.kaukus.node.agents.DiscoveryAgent;
-import io.hnsn.kaukus.node.agents.DiscoveryAgentImpl;
-import io.hnsn.kaukus.node.agents.ServerAgent;
-import io.hnsn.kaukus.node.agents.ServerAgentImpl;
+import io.hnsn.kaukus.node.agents.broadcast.BroadcastAgent;
+import io.hnsn.kaukus.node.agents.broadcast.BroadcastAgentImpl;
+import io.hnsn.kaukus.node.agents.client.ClientAgent;
+import io.hnsn.kaukus.node.agents.client.ClientAgentImpl;
+import io.hnsn.kaukus.node.agents.connection.ConnectionAgent;
+import io.hnsn.kaukus.node.agents.connection.ConnectionAgentImpl;
+import io.hnsn.kaukus.node.agents.server.ServerAgent;
+import io.hnsn.kaukus.node.agents.server.ServerAgentImpl;
 import io.hnsn.kaukus.node.state.NodeStateMachine;
 import io.hnsn.kaukus.node.state.NodeStateMachineImpl;
 import io.hnsn.kaukus.persistence.LSMTree;
@@ -35,6 +37,10 @@ public class NodeModule extends AbstractModule {
     @Qualifier
     @Retention(RUNTIME)
     public @interface SharedExecutor {}
+
+    @Qualifier
+    @Retention(RUNTIME)
+    public @interface NodeIdentifier {}
 
     private final LSMTree systemLSMTree;
     private final OnUnrecoverableErrorListener errorHandler;
@@ -63,6 +69,11 @@ public class NodeModule extends AbstractModule {
     NodeStateMachine provideNodeStateMachine(NodeStateMachineImpl impl) { return impl; }
 
     @Provides @Singleton
+    ConnectionAgent provideConnectionAgent(LoggerProvider loggerProvider) {
+        return new ConnectionAgentImpl(loggerProvider);
+    }
+
+    @Provides @Singleton
     ServerAgent provideServerAgent(NodeConfiguration configuration, LoggerProvider loggerProvider, @SharedExecutor ExecutorService executorService) {
         return new ServerAgentImpl(
             configuration.getSystemAddress(),
@@ -74,17 +85,32 @@ public class NodeModule extends AbstractModule {
     }
 
     @Provides @Singleton
-    DiscoveryAgent provideDiscoveryAgent(NodeConfiguration configuration, ServerAgent serverAgent, LoggerProvider loggerProvider, @SharedExecutor ExecutorService executorService) {
-        return new DiscoveryAgentImpl(
+    BroadcastAgent provideDiscoveryAgent(
+        NodeConfiguration configuration,
+        ServerAgent serverAgent,
+        LoggerProvider loggerProvider,
+        @SharedExecutor ExecutorService executorService,
+        @SharedExecutor ScheduledExecutorService scheduledExecutorService,
+        @NodeIdentifier String nodeIdentifier
+    ) {
+        return new BroadcastAgentImpl(
             configuration.getBroadcastAddress(),
             configuration.getBroadcastPort(),
             loggerProvider,
             serverAgent,
-            executorService);
+            executorService,
+            scheduledExecutorService,
+            configuration,
+            nodeIdentifier);
     }
 
     @Provides @Singleton
     ClientAgent provideClientAgent(NodeConfiguration configuration, ServerAgent serverAgent, LoggerProvider loggerProvider, @SharedExecutor ScheduledExecutorService executorService) {
         return new ClientAgentImpl(configuration, serverAgent, loggerProvider, executorService);
+    }
+
+    @Provides @NodeIdentifier
+    String provideNodeIdentifier(SystemStore systemStore) {
+        return systemStore.getIdentifier();
     }
 }

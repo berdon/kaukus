@@ -7,6 +7,9 @@ import java.io.OutputStream;
 import java.util.Base64;
 import java.util.Base64.Encoder;
 
+import io.hnsn.kaukus.persistence.serialization.SerializerFactory;
+import io.hnsn.kaukus.persistence.serialization.StreamSerializer;
+
 public class SSTableWriter implements Closeable, Flushable {
     private final OutputStream out;
     private final Encoder encoder = Base64.getEncoder();

@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 import io.hnsn.kaukus.persistence.SSTable.Entry;
+import io.hnsn.kaukus.persistence.serialization.Base64SerializerFactory;
 
 public class SSTableTests {
     @Test

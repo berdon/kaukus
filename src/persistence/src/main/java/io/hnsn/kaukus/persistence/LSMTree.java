@@ -1,11 +1,17 @@
 package io.hnsn.kaukus.persistence;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.io.StringBufferInputStream;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,8 +27,9 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-import lombok.Getter;
-import lombok.Setter;
+import javax.management.RuntimeErrorException;
+
+import io.hnsn.kaukus.persistence.serialization.StreamSerializer;
 
 /**
  * Log Structured Merge Tree (LSM-Tree)
@@ -141,7 +148,7 @@ public class LSMTree implements Closeable {
     public boolean containsKey(String key) {
         if (memoryMap.containsKey(key)) {
             var lsmTreeValue = memoryMap.get(key);
-            return lsmTreeValue != null && !lsmTreeValue.isTombstone;
+            return lsmTreeValue != null && !lsmTreeValue.isTombstone();
         }
 
         var segments = getSegments();
@@ -159,6 +166,28 @@ public class LSMTree implements Closeable {
         }
 
         return false;
+    }
+
+    public <T> T get(String key, Class<T> cls) throws ClassNotFoundException {
+        var serializedString = get(key);
+        if (serializedString == null) return null;
+        // TODO: Encoding
+        try (var inputStream = new ByteArrayInputStream(serializedString.getBytes(StandardCharsets.ISO_8859_1))) {
+            var adsf = 5;
+            try (var outputStream = new ObjectInputStream(inputStream)) {
+                var output = (T) outputStream.readObject();
+                return output;
+            }
+            catch (Exception e) {
+                adsf = 1;
+            }
+        }
+        catch (IOException exception) {
+            // Ignoring thrown close exception
+        }
+
+        // Shouldn't be possible...
+        throw new RuntimeException("Unexpected unserialized? response");
     }
 
     /**
@@ -190,6 +219,25 @@ public class LSMTree implements Closeable {
         }
 
         return null;
+    }
+
+    public <T> void put(String key, T value) {
+        if (key == null) throw new InvalidParameterException("Key cannot be null");
+        if (key.isEmpty()) throw new InvalidParameterException("Key cannot be empty");
+        if (value == null) throw new InvalidParameterException("Value cannot be null");
+
+        try (var outputStream = new ByteArrayOutputStream()) {
+            try (var objectStream = new ObjectOutputStream(outputStream)) {
+                objectStream.writeObject(value);
+                objectStream.flush();
+                objectStream.close();
+            }
+
+            var string = new String(outputStream.toByteArray(), StandardCharsets.ISO_8859_1);
+            put(key, string);
+        } catch (IOException exception) {
+            // Ignore
+        }
     }
 
     /**
@@ -243,7 +291,7 @@ public class LSMTree implements Closeable {
                             var lsmTreeValue = pair.getValue();
 
                             // Write out the entry
-                            if (lsmTreeValue != null && lsmTreeValue.value != null) sstableWriter.write(key, lsmTreeValue.value);
+                            if (lsmTreeValue != null && lsmTreeValue.getValue() != null) sstableWriter.write(key, lsmTreeValue.getValue());
                             else sstableWriter.writeTombstone(key);
                         }
                     }
@@ -370,24 +418,5 @@ public class LSMTree implements Closeable {
         if (walOutputStream != null) walOutputStream.close();
         if (walSerializer != null) walSerializer.close();
         flush();
-    }
-
-    @Getter
-    @Setter
-    private static class LSMTreeValue {
-        public static final LSMTreeValue TOMBSTONE = new LSMTreeValue(true);
-
-        private final String value;
-        private final boolean isTombstone;
-
-        public LSMTreeValue(String value) {
-            this.value = value;
-            this.isTombstone = false;
-        }
-
-        private LSMTreeValue(boolean isTombstone) {
-            this.value = null;
-            this.isTombstone = true;
-        }
     }
 }

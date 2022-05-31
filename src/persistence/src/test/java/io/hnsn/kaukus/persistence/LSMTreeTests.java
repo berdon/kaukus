@@ -17,9 +17,12 @@ import java.nio.file.Paths;
 import java.security.InvalidParameterException;
 import java.text.MessageFormat;
 import java.util.Base64;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
+
+import io.hnsn.kaukus.persistence.serialization.Base64Deserializer;
 
 public class LSMTreeTests {
     @Test
@@ -262,6 +265,27 @@ public class LSMTreeTests {
             assertThrows(InvalidParameterException.class, () -> {
                 lsmTree.put("", "some-empty-value");
             });
+        }
+    }
+
+    @Test
+    public void canPutObject() throws IOException, ClassNotFoundException {
+        var filePath = Path.of(File.createTempFile("test", null).getPath());
+        try (var lsmTree = LSMTree.openOrCreate(filePath)) {
+            lsmTree.put("some-int-value", 5);
+            assertTrue(lsmTree.containsKey("some-int-value"));
+            assertEquals(5, lsmTree.get("some-int-value", int.class));
+            assertEquals(5, lsmTree.get("some-int-value", Integer.class));
+
+            lsmTree.put("some-float-value", 5.04f);
+            assertTrue(lsmTree.containsKey("some-float-value"));
+            assertEquals(5.04f, lsmTree.get("some-float-value", float.class));
+            assertEquals(5.04f, lsmTree.get("some-float-value", Float.class));
+
+            lsmTree.put("some-map-value", Map.of("key", "value"));
+            assertTrue(lsmTree.containsKey("some-map-value"));
+            Map<String, String> map = (Map<String, String>) lsmTree.get("some-map-value", Map.class);
+            assertEquals("value", map.get("key"));
         }
     }
 }

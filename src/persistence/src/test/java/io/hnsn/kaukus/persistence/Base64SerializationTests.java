@@ -9,6 +9,9 @@ import java.util.Base64;
 
 import org.junit.jupiter.api.Test;
 
+import io.hnsn.kaukus.persistence.serialization.Base64Deserializer;
+import io.hnsn.kaukus.persistence.serialization.Base64StreamSerializer;
+
 public class Base64SerializationTests {
     @Test
     public void SerializingStringResultsInDeserializableByteArray() throws IOException {

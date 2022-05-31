@@ -1,4 +1,4 @@
-package io.hnsn.kaukus.persistence;
+package io.hnsn.kaukus.persistence.serialization;
 
 import java.io.IOException;
 

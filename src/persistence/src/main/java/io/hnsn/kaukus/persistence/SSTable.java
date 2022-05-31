@@ -11,6 +11,7 @@ import java.util.Base64;
 import java.util.Base64.Decoder;
 import java.util.stream.Stream;
 
+import io.hnsn.kaukus.persistence.serialization.SerializerFactory;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;

@@ -1,4 +1,4 @@
-package io.hnsn.kaukus.persistence;
+package io.hnsn.kaukus.persistence.serialization;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -14,6 +14,7 @@ public class Base64StreamSerializer implements StreamSerializer {
 
     @Override
     public void write(String value) throws IOException {
+        // TODO: Encoding
         outputStream.write(value.getBytes());
         outputStream.flushWithPadding();
     }

@@ -1,6 +1,8 @@
 package io.hnsn.kaukus.persistence;
 
 import lombok.Builder.Default;
+import io.hnsn.kaukus.persistence.serialization.SerializerFactory;
+import io.hnsn.kaukus.persistence.serialization.Base64SerializerFactory;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;

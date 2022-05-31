@@ -24,11 +24,10 @@ import io.hnsn.kaukus.configuration.SystemStore;
 import io.hnsn.kaukus.guice.LoggerProvider;
 import io.hnsn.kaukus.guiceModules.NodeModule.SharedExecutor;
 import io.hnsn.kaukus.node.OnUnrecoverableErrorListener;
-import io.hnsn.kaukus.node.agents.ClientAgent;
-import io.hnsn.kaukus.node.agents.DiscoveryAgent;
-import io.hnsn.kaukus.node.agents.OnBroadcastReceivedListener;
-import io.hnsn.kaukus.node.agents.OnClientConnectedListener;
-import io.hnsn.kaukus.node.agents.ServerAgent;
+import io.hnsn.kaukus.node.agents.broadcast.BroadcastAgent;
+import io.hnsn.kaukus.node.agents.client.ClientAgent;
+import io.hnsn.kaukus.node.agents.connection.ConnectionAgent;
+import io.hnsn.kaukus.node.agents.server.ServerAgent;
 import io.hnsn.kaukus.std.NullCoallesce;
 import io.hnsn.kaukus.std.StringUtils;
 
@@ -45,8 +44,9 @@ public class NodeStateMachineImpl implements NodeStateMachine {
     private final ListenerSource listeners = new ListenerSource();
 
     private final ServerAgent serverAgent;
-    private final DiscoveryAgent discoveryAgent;
+    private final BroadcastAgent discoveryAgent;
     private final ClientAgent clientAgent;
+    private final ConnectionAgent connectionAgent;
 
     private AtomicBoolean isTerminating = new AtomicBoolean(false);
 
@@ -60,13 +60,15 @@ public class NodeStateMachineImpl implements NodeStateMachine {
         NodeConfiguration configuration,
         LoggerProvider loggerProvider,
         ServerAgent serverAgent,
-        DiscoveryAgent discoveryAgent,
-        ClientAgent clientAgent
+        BroadcastAgent discoveryAgent,
+        ClientAgent clientAgent,
+        ConnectionAgent connectionAgent
     ) {
         this.executorService = executorService;
         this.scheduledExecutorService = scheduledExecutorService;
         this.systemStore = systemStore;
         this.configuration = configuration;
+        this.connectionAgent = connectionAgent;
         this.log = loggerProvider.get("NodeState");
         this.serverAgent = serverAgent;
         this.discoveryAgent = discoveryAgent;
@@ -242,6 +244,8 @@ public class NodeStateMachineImpl implements NodeStateMachine {
             var address = configuration.getSystemAddress();
             var port = configuration.getSystemPort();
 
+            connectionAgent.start();
+
             log.info("Binding to {}:{}", address, port);
             serverAgent.start();
             log.info("Successfully bound to {}:{}", serverAgent.getBoundAddress(), serverAgent.getBoundPort());
@@ -280,6 +284,7 @@ public class NodeStateMachineImpl implements NodeStateMachine {
             executorService.submit(() -> { stateMachine.fire(NodeStateTrigger.Stop); });
 
             try {
+                connectionAgent.close();
                 serverAgent.close();
                 discoveryAgent.close();
                 clientAgent.close();
@@ -349,25 +354,5 @@ public class NodeStateMachineImpl implements NodeStateMachine {
     @Override
     public void unregisterStateChangedListener(OnStateChangedListener listener) {
         listeners.get(OnStateChangedListener.class).remove(listener);
-    }
-
-    @Override
-    public void registerOnClientConnectedListener(OnClientConnectedListener listener) {
-        serverAgent.registerOnClientConnectedListener(listener);
-    }
-
-    @Override
-    public void unregisterOnClientConnectedListener(OnClientConnectedListener listener) {
-        serverAgent.unregisterOnClientConnectedListener(listener);
-    }
-
-    @Override
-    public void registerOnBroadcastReceivedListener(OnBroadcastReceivedListener listener) {
-        discoveryAgent.registerOnBroadcastReceivedListener(listener);
-    }
-
-    @Override
-    public void unregisterOnBroadcastReceivedListener(OnBroadcastReceivedListener listener) {
-        discoveryAgent.unregisterOnBroadcastReceivedListener(listener);
     }
 }

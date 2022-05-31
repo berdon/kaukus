@@ -1,8 +1,11 @@
-package io.hnsn.kaukus.node.agents;
+package io.hnsn.kaukus.node.agents.server;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 import javax.net.ServerSocketFactory;
@@ -10,6 +13,8 @@ import javax.net.ServerSocketFactory;
 import org.slf4j.Logger;
 
 import io.hnsn.kaukus.guice.LoggerProvider;
+import io.hnsn.kaukus.node.agents.AgentException;
+import io.hnsn.kaukus.node.agents.connection.ServerConnection;
 import io.hnsn.kaukus.node.state.ListenerSource;
 
 public class ServerAgentImpl implements ServerAgent {
@@ -19,6 +24,7 @@ public class ServerAgentImpl implements ServerAgent {
     private final Logger log;
     private final ExecutorService executorService;
     private final ListenerSource listeners = new ListenerSource();
+    private final Map<String, Socket> sockets = new ConcurrentHashMap<>();
     
     private ServerSocket systemSocket;
     private Thread serverThread;
@@ -42,8 +48,21 @@ public class ServerAgentImpl implements ServerAgent {
                 while(!serverThread.isInterrupted()) {
                     try {
                         var socket = systemSocket.accept();
+                        // TODO: Only add socket after initial handshake getting node ID
+                        var socketId = String.format("%s:%d", socket.getLocalAddress(), socket.getPort());
+                        sockets.put(socketId, socket);
+                        var connection = new ServerConnection(socketId, (con) -> {
+                            sockets.remove(socketId);
+                            try { socket.close(); }
+                            catch (IOException e) { log.warn("Exception occurred while closing socket", e); }
+                        
+                            executorService.submit(() -> {
+                                listeners.get(OnClientDisconnectedListener.class).forEach(listener -> listener.onDisconnected(con));
+                            });
+                        }, socket);
+
                         executorService.submit(() -> {
-                            listeners.get(OnClientConnectedListener.class).forEach(listener -> listener.onConnected(socket));
+                            listeners.get(OnClientConnectedListener.class).forEach(listener -> listener.onConnected(connection));
                         });
                     } catch (IOException e) {
                         if (!serverThread.isInterrupted())
@@ -84,5 +103,15 @@ public class ServerAgentImpl implements ServerAgent {
     @Override
     public void unregisterOnClientConnectedListener(OnClientConnectedListener listener) {
         listeners.get(OnClientConnectedListener.class).remove(listener);
+    }
+
+    @Override
+    public void registerOnClientDisconnectedListener(OnClientDisconnectedListener listener) {
+        listeners.get(OnClientDisconnectedListener.class).add(listener);
+    }
+
+    @Override
+    public void unregisterOnClientDisconnectedListener(OnClientDisconnectedListener listener) {
+        listeners.get(OnClientDisconnectedListener.class).remove(listener);
     }
 }
