@@ -16,6 +16,6 @@ public class LSMTreeValue {
 
     private LSMTreeValue(boolean isTombstone) {
         this.value = null;
-        this.isTombstone = true;
+        this.isTombstone = isTombstone;
     }
 }

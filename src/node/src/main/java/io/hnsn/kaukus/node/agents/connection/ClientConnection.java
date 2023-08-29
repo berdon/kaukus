@@ -3,24 +3,25 @@ package io.hnsn.kaukus.node.agents.connection;
 import java.io.IOException;
 import java.net.Socket;
 
-public class ClientConnection extends BaseConnection {
+import org.slf4j.Logger;
+
+import io.hnsn.kaukus.guice.LoggerProvider;
+import lombok.Getter;
+
+public class ClientConnection extends SocketConnection {
+    @Getter
     private final String nodeIdentifier;
-    private final ConnectionCloseable closeable;
-    private final Socket socket;
+    @Getter
+    private final String address;
+    @Getter
+    private final int port;
+    private final Logger log;
 
-    public ClientConnection(String nodeIdentifier, ConnectionCloseable closeable, Socket socket) {
+    public ClientConnection(LoggerProvider loggerProvider, String nodeIdentifier, String address, int port, ConnectionCloseable closeable, Socket socket) throws IOException {
+        super(loggerProvider, closeable, socket);
         this.nodeIdentifier = nodeIdentifier;
-        this.closeable = closeable;
-        this.socket = socket;
-    }
-
-    @Override
-    public void close() throws IOException {
-        closeable.close(this);
-    }
-
-    @Override
-    public String getNodeIdentifier() {
-        return nodeIdentifier;
+        this.address = address;
+        this.port = port;
+        this.log = loggerProvider.get("ClientConnection");
     }
 }

@@ -20,14 +20,14 @@ public class SSTableWriter implements Closeable, Flushable {
         this.serializer = serializerFactory.createStreamSerializer(out);
     }
 
-    public <TValue> void write(String key, String value) throws IOException {
+    public void write(String key, String value) throws IOException {
         out.write(encoder.encode(key.getBytes()));
         out.write(':');
         serializer.write(value);
         out.write('\n');
     }
 
-    public <TValue> void writeTombstone(String key) throws IOException {
+    public void writeTombstone(String key) throws IOException {
         out.write(encoder.encode(key.getBytes()));
         out.write('\n');
     }

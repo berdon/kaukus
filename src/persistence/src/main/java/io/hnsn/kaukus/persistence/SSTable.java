@@ -20,8 +20,8 @@ public class SSTable {
     private final Path filePath;
     private final SSTableConfiguration configuration;
 
-    private IndexTuple[] index;
-    private Object indexLock = new Object();
+    private volatile IndexTuple[] index;
+    private final Object indexLock = new Object();
     private final static Decoder decoder = Base64.getDecoder();
 
     public SSTable(Path filePath, SSTableConfiguration configuration) {
@@ -60,7 +60,7 @@ public class SSTable {
             var middle = (left + right) / 2;
             var compare = index[middle].getKey().compareTo(key);
             if (compare == 0) {
-                if (existsOnly == true) {
+                if (existsOnly) {
                     // Checking for existence only; skipping file open if we can
                     return index[middle].isTombstone ? SSTableResult.TOMBSTONE : SSTableResult.EMPTY;
                 }
@@ -70,7 +70,7 @@ public class SSTable {
                 return new SSTableResult(tokens.getDecodedValue(configuration.serializerFactory));
             }
             else if (compare > 0) right = middle;
-            else if (compare < 0) left = middle + 1;
+            else left = middle + 1;
         }
 
         // Walk the file starting left to the next index
@@ -90,7 +90,7 @@ public class SSTable {
                 var decodedLineKey = tokens.getDecodedKey(decoder);
                 
                 if (decodedLineKey.compareTo(key) == 0) {
-                    if (existsOnly == true) {
+                    if (existsOnly) {
                         // Existence only; skip deserializing the value
                         return tokens.isTombstone ? SSTableResult.TOMBSTONE : SSTableResult.EMPTY;
                     }

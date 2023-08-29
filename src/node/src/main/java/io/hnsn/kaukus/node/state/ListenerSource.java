@@ -15,4 +15,8 @@ public class ListenerSource {
 
         return (CopyOnWriteArraySet<TListener>) listeners.get(cls);
     }
+
+    public void clear() {
+        listeners.clear();
+    }
 }

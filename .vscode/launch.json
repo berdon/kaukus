@@ -19,6 +19,37 @@
             "console": "externalTerminal",
             "args": "--verbose",
             "env": {}
+        },
+        {
+            "type": "java",
+            "name": "Launch Kaukus 1",
+            "shortenCommandLine": "jarmanifest",
+            "request": "launch",
+            "mainClass": "io.hnsn.kaukus.App",
+            "projectName": "node",
+            "console": "integratedTerminal",
+            "args": "--verbose --system-store-path /etc/kaukus/system",
+            "env": {}
+        },
+        {
+            "type": "java",
+            "name": "Launch Kaukus 2",
+            "shortenCommandLine": "jarmanifest",
+            "request": "launch",
+            "mainClass": "io.hnsn.kaukus.App",
+            "projectName": "node",
+            "console": "integratedTerminal",
+            "args": "--verbose --system-port 21001 --system-store-path /etc/kaukus/system2",
+            "env": {}
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Kaukus 1, 2",
+            "configurations": [
+                "Launch Kaukus 1",
+                "Launch Kaukus 2"
+            ]
         }
     ]
 }

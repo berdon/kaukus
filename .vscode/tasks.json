@@ -6,10 +6,7 @@
 			"id": "/Users/berdon/workspace/landfill/kaukus:buildkaukus",
 			"script": "build",
 			"description": "Assembles and tests this project.",
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
+			"group": "build",
 			"project": "kaukus",
 			"buildFile": "/Users/berdon/workspace/landfill/kaukus/build.gradle",
 			"rootProject": "kaukus",
@@ -21,6 +18,27 @@
 				"$gradle"
 			],
 			"label": "gradle: build"
+		},
+		{
+			"label": "Kaukus 1: reset",
+			"type": "shell",
+			"command": "./kaukus --system-store-path /etc/kaukus/system reset",
+			"problemMatcher": []
+		},
+		{
+			"label": "Kaukus 2: reset",
+			"type": "shell",
+			"command": "./kaukus --system-store-path /etc/kaukus/system2 reset",
+			"problemMatcher": []
+		},
+		{
+			"label": "Kaukus: reset all",
+			"type": "shell",
+			"dependsOn": [
+				"Kaukus 1: reset",
+				"Kaukus 2: reset"
+			],
+			"problemMatcher": []
 		}
 	]
 }

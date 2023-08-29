@@ -1,0 +1,11 @@
+{
+    "name": "RequestStorageSetMessage",
+    "namespace": "io.hnsn.kaukus.encoding",
+    "type": "record",
+    "fields": [
+        { "name": "namespace", "type": "string" },
+        { "name": "key", "type": "string" },
+        { "name": "value", "type": "string" },
+        { "name": "nodeIdentifier", "type": "string" }
+    ]
+}

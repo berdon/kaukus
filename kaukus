@@ -1,0 +1,8 @@
+build_fat_jar_artifact="src/node/build/libs/node-fat.jar"
+
+if [ ! -f "${build_fat_jar_artifact}" ]; then
+    echo "'${build_fat_jar_artifact}' not found; building..."
+    ./gradlew build fatjar
+fi
+
+java -jar src/node/build/libs/node-fat.jar $@

@@ -1,0 +1,9 @@
+{
+    "name": "LeaderAnnouncementMessage",
+    "namespace": "io.hnsn.kaukus.encoding",
+    "type": "record",
+    "fields": [
+        { "name": "leaderNodeIdentifier", "type": "string" },
+        { "name": "nodeIdentifier", "type": "string" }
+    ]
+}

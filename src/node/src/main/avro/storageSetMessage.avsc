@@ -1,0 +1,10 @@
+{
+    "name": "StorageDeleteMessage",
+    "namespace": "io.hnsn.kaukus.encoding",
+    "type": "record",
+    "fields": [
+        { "name": "namespace", "type": "string" },
+        { "name": "key", "type": "string" },
+        { "name": "nodeIdentifier", "type": "string" }
+    ]
+}

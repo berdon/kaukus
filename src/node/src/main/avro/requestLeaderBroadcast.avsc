@@ -1,0 +1,10 @@
+{
+    "name": "RequestLeaderBroadcast",
+    "namespace": "io.hnsn.kaukus.encoding",
+    "type": "record",
+    "fields": [
+        { "name": "nodeIdentifier", "type": "string" },
+        { "name": "sourceAddress", "type": "string" },
+        { "name": "sourcePort", "type": "int" }
+    ]
+}

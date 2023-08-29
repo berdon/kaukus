@@ -40,7 +40,7 @@ import io.hnsn.kaukus.persistence.SSTable.IndexTuple;
             bytesRead += tokens.length;
         }
 
-        return index.toArray(new IndexTuple[index.size()]);
+        return index.toArray(new IndexTuple[0]);
     }
 
     private static class LineTokens {

@@ -1,5 +1,8 @@
 package io.hnsn.kaukus.node.state;
 
+import io.hnsn.kaukus.node.agents.quorum.QuorumAgent;
+import io.hnsn.kaukus.node.agents.storage.StorageAgent;
+import io.hnsn.kaukus.node.agents.webserver.WebServerAgent;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -47,6 +50,9 @@ public class NodeStateMachineImpl implements NodeStateMachine {
     private final BroadcastAgent discoveryAgent;
     private final ClientAgent clientAgent;
     private final ConnectionAgent connectionAgent;
+    private final StorageAgent storageAgent;
+    private final QuorumAgent quorumAgent;
+    private final WebServerAgent webServerAgent;
 
     private AtomicBoolean isTerminating = new AtomicBoolean(false);
 
@@ -62,7 +68,10 @@ public class NodeStateMachineImpl implements NodeStateMachine {
         ServerAgent serverAgent,
         BroadcastAgent discoveryAgent,
         ClientAgent clientAgent,
-        ConnectionAgent connectionAgent
+        ConnectionAgent connectionAgent,
+        StorageAgent storageAgent,
+        QuorumAgent quorumAgent,
+        WebServerAgent webServerAgent
     ) {
         this.executorService = executorService;
         this.scheduledExecutorService = scheduledExecutorService;
@@ -73,6 +82,9 @@ public class NodeStateMachineImpl implements NodeStateMachine {
         this.serverAgent = serverAgent;
         this.discoveryAgent = discoveryAgent;
         this.clientAgent = clientAgent;
+        this.storageAgent = storageAgent;
+        this.quorumAgent = quorumAgent;
+        this.webServerAgent = webServerAgent;
 
         var stateMachineConfig = new StateMachineConfig<NodeState, NodeStateTrigger>();
         stateMachineConfig.setTriggerParameters(NodeStateTrigger.UnrecoverableError, String.class, Throwable.class);
@@ -244,6 +256,9 @@ public class NodeStateMachineImpl implements NodeStateMachine {
             var address = configuration.getSystemAddress();
             var port = configuration.getSystemPort();
 
+            log.info("Initializing quorum agent");
+            quorumAgent.start();
+
             connectionAgent.start();
 
             log.info("Binding to {}:{}", address, port);
@@ -253,8 +268,14 @@ public class NodeStateMachineImpl implements NodeStateMachine {
             discoveryAgent.start();
             log.info("Listening on {}:{} for discovery broadcasts", discoveryAgent.getBoundAddress(), discoveryAgent.getBoundPort());
 
-            clientAgent.start();
             log.info("Initializing client agent");
+            clientAgent.start();
+
+            log.info("Initializing storage agent");
+            storageAgent.start();
+
+            log.info("Initializing webserver agent");
+            webServerAgent.start();
 
             executorService.submit(() -> { stateMachine.fire(NodeStateTrigger.Ready); });
         } catch (Exception e) {
@@ -288,6 +309,9 @@ public class NodeStateMachineImpl implements NodeStateMachine {
                 serverAgent.close();
                 discoveryAgent.close();
                 clientAgent.close();
+                storageAgent.close();
+                quorumAgent.close();
+                webServerAgent.close();
 
                 // Wait for the notification that we can dispose
                 canDispose.acquire();
@@ -299,10 +323,10 @@ public class NodeStateMachineImpl implements NodeStateMachine {
             executorService.shutdown();
             scheduledExecutorService.shutdown();
 
-            try { executorService.awaitTermination(250, TimeUnit.MILLISECONDS); } catch (InterruptedException e) { }
+            try { executorService.awaitTermination(250, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) { }
             if (!executorService.isShutdown()) executorService.shutdownNow();
 
-            try { scheduledExecutorService.awaitTermination(250, TimeUnit.MILLISECONDS); } catch (InterruptedException e) { }
+            try { scheduledExecutorService.awaitTermination(250, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) { }
             if (!scheduledExecutorService.isShutdown()) scheduledExecutorService.shutdownNow();
         }
     }

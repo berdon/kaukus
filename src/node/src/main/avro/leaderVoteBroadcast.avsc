@@ -1,0 +1,12 @@
+{
+    "name": "LeaderVoteBroadcast",
+    "namespace": "io.hnsn.kaukus.encoding",
+    "type": "record",
+    "fields": [
+        { "name": "vote", "type": "int" },
+        { "name": "epoch", "type": "int" },
+        { "name": "nodeIdentifier", "type": "string" },
+        { "name": "sourceAddress", "type": "string" },
+        { "name": "sourcePort", "type": "int" }
+    ]
+}

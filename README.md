@@ -2,6 +2,39 @@
 
 Toy, leaderless, distributed key-value store.
 
+# Development
+
+## Building
+
+```bash
+gradle clean fatjar
+```
+
+## Running
+
+```bash
+mkdir kaukus1
+mkdir kaukus2
+mkdir kaukus3
+./kaukus --system-store-path `pwd`/kaukus1/system &
+./kaukus --system-store-path `pwd`/kaukus2/system --system-port 21001 --webserver-port 3001 &
+./kaukus --system-store-path `pwd`/kaukus3/system --system-port 21002 --webserver-port 3002 &
+```
+
+```bash
+➜  ~curl --request POST --data 'bar' localhost:3000/kaukus/namespace1/foo
+➜  ~curl localhost:3001/kaukus/namespace1/foo
+bar%
+➜  ~curl localhost:3002/kaukus/namespace1/foo
+bar%
+```
+
+## Tearing Down
+
+Right now you need to issue a 'q' command to the nodes to terminate them "cleanly". If you don't, you'll need to run them with a 'reset' command to clear their state.
+
+# Design
+
 ## Persistence
 
 Key-value pairs are stored using an LSM-Tree; WAL file for crash recovery.
@@ -19,7 +52,7 @@ Real loose, tenative plan:
 3. ClientAgent broadcasts and says "Hi!"
 4. DiscoveryAgents receive "Hi!" message and
    1. Could just issue a connection to the new client?
-   2. Could respond with a broadcast of there own (probably not this)
+   2. Could respond with a broadcast of their own (probably not this)
 
 ### Epoch / Pre-Epoch Maintenance
 
@@ -46,7 +79,7 @@ Real loose, tenative plan:
    3. Proposer nodes who receive a proposal with a higher epoch/clout abort their proposal
    4. Nodes otherwise respond yes
 4. Proposers wait (possibly forever) to receive a majority of yes or nos
-   1. Proposers who receive majority of yes acknowledgements sends out a message saying they're the leader
+   1. Proposers who receive a majority of yes acknowledgements sends out a message saying they're the leader
    2. Nodes who receive the leader message update their epoch/leader mapping
 
 ### LSM-Tree

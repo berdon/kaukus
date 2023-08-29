@@ -14,7 +14,4 @@ public class NonClosingStream extends OutputStream {
     public void write(int b) throws IOException {
         outputStream.write(b);
     }
-
-    @Override
-    public void close() throws IOException { }
 }

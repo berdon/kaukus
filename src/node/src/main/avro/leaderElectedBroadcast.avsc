@@ -1,0 +1,11 @@
+{
+    "name": "LeaderElectedBroadcast",
+    "namespace": "io.hnsn.kaukus.encoding",
+    "type": "record",
+    "fields": [
+        { "name": "epoch", "type": "int" },
+        { "name": "nodeIdentifier", "type": "string" },
+        { "name": "sourceAddress", "type": "string" },
+        { "name": "sourcePort", "type": "int" }
+    ]
+}

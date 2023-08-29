@@ -23,6 +23,7 @@ import java.util.Base64;
 import java.util.Base64.Encoder;
 import java.util.Comparator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,7 +64,7 @@ public class LSMTree implements Closeable {
     private final SSTableConfiguration configuration = SSTableConfiguration.builder().build();
 
     // Lazy
-    private SortedMap<String, SSTable> segments = null;
+    private volatile SortedMap<String, SSTable> segments = null;
     private OutputStream walOutputStream = null;
     private StreamSerializer walSerializer = null;
     private final Object segmentLock = new Object();
@@ -127,7 +128,8 @@ public class LSMTree implements Closeable {
                 try {
                     var value = isTombstone
                         ? LSMTreeValue.TOMBSTONE
-                        : new LSMTreeValue(configuration.serializerFactory.createDeserializer(new ByteArrayInputStream(tokens[1].getBytes())).read());
+                        : new LSMTreeValue(configuration.serializerFactory.createDeserializer(
+                            new ByteArrayInputStream(tokens[1].getBytes())).read());
                     memoryMap.put(key, value);
                 } catch (IOException e) {
                     // TODO Auto-generated catch block
@@ -173,13 +175,10 @@ public class LSMTree implements Closeable {
         if (serializedString == null) return null;
         // TODO: Encoding
         try (var inputStream = new ByteArrayInputStream(serializedString.getBytes(StandardCharsets.ISO_8859_1))) {
-            var adsf = 5;
             try (var outputStream = new ObjectInputStream(inputStream)) {
+                @SuppressWarnings("unchecked")
                 var output = (T) outputStream.readObject();
                 return output;
-            }
-            catch (Exception e) {
-                adsf = 1;
             }
         }
         catch (IOException exception) {
@@ -230,14 +229,11 @@ public class LSMTree implements Closeable {
             try (var objectStream = new ObjectOutputStream(outputStream)) {
                 objectStream.writeObject(value);
                 objectStream.flush();
-                objectStream.close();
             }
 
             var string = new String(outputStream.toByteArray(), StandardCharsets.ISO_8859_1);
             put(key, string);
-        } catch (IOException exception) {
-            // Ignore
-        }
+        } catch (IOException ignored) { }
     }
 
     /**
@@ -278,10 +274,7 @@ public class LSMTree implements Closeable {
                 synchronized (walLock) {
                     var entries = new ArrayList<>(memoryMap.entrySet());
 
-                    entries.sort((Map.Entry<String, LSMTreeValue> a, Map.Entry<String, LSMTreeValue> b) -> {
-                        return a.getKey().compareTo(b.getKey());
-                    });
-
+                    entries.sort(Entry.comparingByKey());
                     var nextSegmentIndex = segments.size() == 0 ? 0 : Integer.parseInt(segments.lastKey().substring(segments.lastKey().lastIndexOf('.') + 1)) + 1;
                     var nextSegmentFileName = filePath.resolve(fileName + "." + nextSegmentIndex).toString();
                     try (var out = new FileOutputStream(nextSegmentFileName); var sstableWriter = new SSTableWriter(out, configuration.serializerFactory)) {
@@ -348,7 +341,7 @@ public class LSMTree implements Closeable {
         var pathMatcher = FileSystems.getDefault().getPathMatcher(MessageFormat.format("regex:{0}/{1}\\.[0-9]*\\-0$", filePath, fileName));
         try (var files = Files.newDirectoryStream(filePath, pathMatcher::matches)) {
             for (var file : files) {
-                try { Files.deleteIfExists(file); } catch (IOException e) { }
+                try { Files.deleteIfExists(file); } catch (IOException ignored) { }
             }
         }
     }

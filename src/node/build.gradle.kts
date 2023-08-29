@@ -31,6 +31,11 @@ dependencies {
 
     // Avro / Binary Encoding
     implementation("org.apache.avro:avro:1.11.0")
+    implementation("org.xerial.snappy:snappy-java:1.1.8.4")
+
+    // Jetty
+    implementation("org.eclipse.jetty:jetty-server:9.4.3.v20170317")
+    implementation("org.eclipse.jetty:jetty-servlet:9.4.3.v20170317")
 
     compileOnly("org.projectlombok:lombok:1.18.22")
 	annotationProcessor("org.projectlombok:lombok:1.18.22")
